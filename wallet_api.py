@@ -315,21 +315,13 @@ def mount_wallet_api(app: FastAPI, root: Path, collection=None) -> None:
 
     @app.post("/api/vault/unlock")
     def vault_unlock(body: PassphraseRequest) -> dict:
-        from hybrid_search import BM25_INDEX_PATH
-        from vault_state import protect_collection, protect_text_file, unlock
+        from vault_state import unlock
 
         try:
             unlock(body.passphrase)
         except ValueError as exc:
             raise HTTPException(status_code=400, detail="short_passphrase") from exc
-        sealed = 0
-        try:
-            if collection is not None:
-                sealed = protect_collection(collection)
-            protect_text_file(BM25_INDEX_PATH)
-        except Exception:
-            sealed = 0
-        return {"locked": False, "sealed_chunks": sealed}
+        return {"locked": False, "sealed_chunks": 0}
 
     @app.post("/api/vault/lock")
     def vault_lock() -> dict:
