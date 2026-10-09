@@ -47,6 +47,10 @@ class ConfirmRequest(BaseModel):
     signature: str = Field(min_length=64, max_length=100)
 
 
+class PassphraseRequest(BaseModel):
+    passphrase: str = Field(min_length=8, max_length=200)
+
+
 def rpc_url() -> str:
     configured = os.environ.get("HUB_SOLANA_RPC", DEFAULT_RPC).strip()
     allow_mainnet = os.environ.get("HUB_ALLOW_MAINNET", "").strip() == "1"
@@ -310,15 +314,12 @@ def mount_wallet_api(app: FastAPI, root: Path, collection=None) -> None:
             "pbkdf2_iterations": 200_000,
         }
 
-    class PassphraseRequest(BaseModel):
-        passphrase: str = Field(min_length=8, max_length=200)
-
     @app.post("/api/vault/unlock")
-    def vault_unlock(body: PassphraseRequest) -> dict:
+    def vault_unlock(payload: PassphraseRequest) -> dict:
         from vault_state import unlock
 
         try:
-            unlock(body.passphrase)
+            unlock(payload.passphrase)
         except ValueError as exc:
             raise HTTPException(status_code=400, detail="short_passphrase") from exc
         return {"locked": False, "sealed_chunks": 0}
