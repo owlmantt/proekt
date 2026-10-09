@@ -1,0 +1,12 @@
+venv/
+.venv/
+node_modules/
+dist/
+build/
+__pycache__/
+chroma_db/
+hub_data/
+.git/
+*.pyc
+.env
+web/node_modules/

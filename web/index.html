@@ -1,0 +1,648 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>MCP Context Hub</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+  tailwind.config = {
+    theme: {
+      extend: {
+        colors: {
+          bg: '#0c0c0c',
+          surface: '#141414',
+          surface2: '#1c1c1c',
+          line: '#2c2c2c',
+          ink: '#f3f3f3',
+          dim: '#8d8d8d',
+          accent: '#e6e6e6',
+          accentSoft: '#222222',
+          cyan: '#d4d4d4',
+          green: '#d4d4d4',
+          amber: '#bdbdbd',
+        },
+        fontFamily: {
+          sans: ['"IBM Plex Sans"', 'system-ui', 'sans-serif'],
+          mono: ['"IBM Plex Mono"', 'ui-monospace', 'monospace'],
+        },
+      },
+    },
+  }
+</script>
+<style>
+  html { color-scheme: dark; }
+  body { background: #0c0c0c; }
+  ::selection { background: #3a3a3a; color: #fff; }
+
+  .kind-dot { width: 8px; height: 8px; border-radius: 2px; flex-shrink: 0; background: #8d8d8d; }
+
+  .role-pill {
+    transition: color .15s ease, background-color .15s ease, border-color .15s ease;
+  }
+  .role-pill[data-active="true"] {
+    background: #e6e6e6;
+    border-color: #e6e6e6;
+    color: #111111;
+  }
+
+  .glow-border {
+    transition: border-color .15s ease;
+  }
+  .glow-border:focus-within {
+    border-color: #6b6b6b;
+  }
+
+  pre.snippet {
+    scrollbar-width: thin;
+    scrollbar-color: #3a3a3a transparent;
+  }
+  pre.snippet::-webkit-scrollbar { height: 6px; }
+  pre.snippet::-webkit-scrollbar-thumb { background: #3a3a3a; border-radius: 3px; }
+
+  ::-webkit-scrollbar { width: 10px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: #333; border-radius: 6px; }
+</style>
+</head>
+<body class="bg-bg text-ink font-sans antialiased min-h-screen">
+
+  <main class="max-w-3xl mx-auto px-5 py-10">
+
+    <header class="mb-8">
+      <h1 class="text-2xl font-semibold tracking-tight">Контекст для ИИ</h1>
+      <p class="text-dim mt-2 leading-relaxed">Здесь ИИ спрашивает про проект и получает короткий ответ. Фронтенд не читает весь код сервера: он спрашивает про ручку и видит поля запроса.</p>
+    </header>
+
+    <section class="mb-8">
+      <h2 class="text-sm font-medium mb-1">Кто спрашивает</h2>
+      <p id="role-hint" class="text-sm text-dim mb-3">Сначала выберите роль. От неё зависит, что попадёт в ответ.</p>
+      <div id="role-pills" class="flex flex-wrap gap-2"></div>
+    </section>
+
+    <section class="mb-8">
+      <h2 class="text-sm font-medium mb-1">О чём спросить</h2>
+      <p class="text-sm text-dim mb-3">Нажмите пример или напишите свой вопрос.</p>
+      <div class="flex flex-wrap gap-2 mb-3">
+        <button type="button" class="example-query border border-line rounded-md px-3 py-1.5 text-sm text-dim hover:text-ink" data-query="login endpoint" data-role="frontend">Ручка входа</button>
+        <button type="button" class="example-query border border-line rounded-md px-3 py-1.5 text-sm text-dim hover:text-ink" data-query="JWT_SECRET" data-role="backend">Где секрет JWT</button>
+      </div>
+      <form id="search-form" class="glow-border flex flex-wrap items-center gap-3 bg-surface border border-line rounded-xl px-4 py-3">
+        <input
+          id="query"
+          type="text"
+          autocomplete="off"
+          placeholder="Например: ручка входа"
+          class="flex-1 min-w-[12rem] bg-transparent outline-none placeholder:text-dim/70 text-[15px]"
+        />
+        <select id="limit" class="bg-surface2 border border-line rounded-md text-xs px-2 py-1.5 text-dim outline-none" aria-label="Сколько ответов">
+          <option value="5">5 ответов</option>
+          <option value="8" selected>8 ответов</option>
+          <option value="15">15 ответов</option>
+          <option value="25">25 ответов</option>
+        </select>
+        <button type="submit" class="bg-accent text-bg text-sm font-medium px-4 py-1.5 rounded-md">Найти</button>
+      </form>
+      <div id="search-meta" class="text-xs text-dim mt-2 min-h-[16px]"></div>
+    </section>
+
+    <section class="mb-10">
+      <h2 class="text-sm font-medium mb-3">Ответ</h2>
+      <div id="results" class="flex flex-col gap-3 min-h-[80px]">
+        <div class="text-dim text-sm border border-dashed border-line rounded-xl px-4 py-8 text-center">
+          Здесь появится короткий кусок проекта, а не весь репозиторий.
+        </div>
+      </div>
+    </section>
+
+    <section class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-10 text-sm">
+      <div>
+        <div class="text-dim text-xs">Файлов</div>
+        <div id="stat-files" class="text-xl font-semibold mt-1 font-mono">—</div>
+      </div>
+      <div>
+        <div class="text-dim text-xs">Кусков текста</div>
+        <div id="stat-chunks" class="text-xl font-semibold mt-1 font-mono">—</div>
+      </div>
+      <div>
+        <div class="text-dim text-xs">Индекс</div>
+        <div id="stat-status" class="text-xl font-semibold mt-1 flex items-center gap-2">
+          <span id="status-dot" class="w-2 h-2 rounded-full bg-dim"></span>
+          <span id="status-text" class="font-mono text-base">проверка</span>
+        </div>
+      </div>
+      <div>
+        <div class="text-dim text-xs">Чаще всего</div>
+        <div id="stat-top-kind" class="text-xl font-semibold mt-1 font-mono">—</div>
+      </div>
+    </section>
+
+    <section class="flex flex-col gap-4 border-t border-line pt-8">
+      <h2 class="text-sm font-medium">Дальше, если нужно</h2>
+
+      <div class="bg-surface border border-line rounded-xl p-4">
+        <h3 class="text-sm font-medium">Закрыть тексты паролем</h3>
+        <p class="text-sm text-dim mt-1 mb-3">Поиск выше работает и без пароля. Пароль нужен, чтобы скопированная база не читалась. На этой машине текст расшифровывается в браузере.</p>
+        <input id="vault-pass" type="password" autocomplete="current-password" placeholder="Пароль проекта, от 8 символов" class="w-full bg-surface2 border border-line rounded-md text-sm px-3 py-2 outline-none mb-3" />
+        <div class="flex flex-wrap gap-2">
+          <button type="button" id="vault-unlock" class="bg-accent text-bg text-sm font-medium px-3 py-1.5 rounded-md">Открыть</button>
+          <button type="button" id="vault-lock" class="border border-line text-dim text-sm px-3 py-1.5 rounded-md">Закрыть</button>
+        </div>
+        <div id="vault-status" class="text-xs text-dim mt-3">Проверяем хранилище…</div>
+      </div>
+
+      <div class="bg-surface border border-line rounded-xl p-4">
+        <h3 class="text-sm font-medium">Зафиксировать версию API</h3>
+        <p class="text-sm text-dim mt-1 mb-3">Пока версию не выпускали, фронтенд читает текущий файл. После выпуска он продолжает видеть эту версию, даже если файл уже изменили. В сеть уходит только хеш, не сам текст.</p>
+        <div id="wallet-status" class="text-xs text-dim break-all mb-3">Кошелёк не подключён</div>
+        <div class="flex flex-wrap gap-2 mb-3">
+          <button type="button" id="wallet-btn" class="bg-accent text-bg text-sm font-medium px-3 py-1.5 rounded-md">Подключить кошелёк</button>
+          <button type="button" id="wallet-disconnect" class="hidden border border-line text-dim text-sm px-3 py-1.5 rounded-md">Отключить</button>
+          <button type="button" id="anchor-btn" class="border border-line text-ink text-sm px-3 py-1.5 rounded-md disabled:opacity-40" disabled>Выпустить версию</button>
+        </div>
+        <div id="proof-status" class="text-sm text-dim">Проверяем, выпущена ли версия…</div>
+        <a id="proof-link" class="hidden text-xs text-ink underline break-all mt-2" target="_blank" rel="noreferrer"></a>
+        <div id="proof-error" class="hidden text-sm text-ink mt-2"></div>
+        <p class="text-xs text-dim mt-4 mb-1.5">Что получит фронтенд-агент по ручке входа</p>
+        <pre id="agent-view" class="text-[12px] font-mono text-ink/90 bg-surface2 p-3 rounded-lg overflow-x-auto max-h-64 whitespace-pre-wrap">Загружаем…</pre>
+      </div>
+
+      <div class="bg-surface border border-line rounded-xl p-4">
+        <h3 class="text-sm font-medium">Подключить своего ИИ</h3>
+        <p class="text-sm text-dim mt-1 mb-3">Скопируйте адрес в Cursor, Claude или VS Code. Агент спрашивает одну ручку, а не весь файл API.</p>
+        <div id="mcp-url-row" class="flex items-center gap-2 bg-surface2 border border-line rounded-lg px-3 py-2">
+          <code id="mcp-url" class="text-xs font-mono text-ink truncate flex-1">http://localhost:8000/mcp/sse</code>
+          <button id="copy-btn" type="button" class="text-xs text-dim hover:text-ink shrink-0">Копировать</button>
+        </div>
+      </div>
+
+      <div>
+        <h3 class="text-sm font-medium mb-3">Из чего состоит индекс</h3>
+        <div id="kind-breakdown" class="flex flex-col gap-2 text-xs">
+          <div class="text-dim">Загрузка…</div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+<script>
+  const ROLES = [
+    { id: 'all', label: 'Все', hint: 'Ответ может содержать и код, и описание API.' },
+    { id: 'frontend', label: 'Фронтенд', hint: 'Только описание API: ручки, поля и ошибки. Код сервера скрыт.' },
+    { id: 'flutter', label: 'Flutter', hint: 'То же, что у фронтенда: контракт API, без исходников бэкенда.' },
+    { id: 'backend', label: 'Бэкенд', hint: 'Код сервера и описание API.' },
+    { id: 'devops', label: 'DevOps', hint: 'Файлы инфраструктуры: yaml, Docker, настройки.' },
+  ];
+
+  const KIND_COLORS = {
+    function: '#d4d4d4',
+    class: '#c4c4c4',
+    method: '#bdbdbd',
+    constant: '#9a9a9a',
+    module: '#8a8a8a',
+    file: '#8a8a8a',
+    json: '#9a9a9a',
+    json_key: '#b0b0b0',
+    section: '#c4c4c4',
+    openapi_info: '#e8e8e8',
+    openapi_endpoint: '#e8e8e8',
+    openapi_schema: '#d0d0d0',
+  };
+
+  function kindColor(kind) {
+    return KIND_COLORS[kind] || '#8a8a8a';
+  }
+
+  let activeRole = 'all';
+
+  function renderRolePills() {
+    const container = document.getElementById('role-pills');
+    container.innerHTML = '';
+    ROLES.forEach(role => {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.textContent = role.label;
+      btn.dataset.role = role.id;
+      btn.dataset.active = String(role.id === activeRole);
+      btn.className = 'role-pill text-sm px-3 py-1.5 rounded-md text-dim border border-line';
+      btn.addEventListener('click', () => {
+        activeRole = role.id;
+        renderRolePills();
+        if (document.getElementById('query').value.trim()) {
+          runSearch();
+        }
+      });
+      container.appendChild(btn);
+    });
+    const hint = document.getElementById('role-hint');
+    const current = ROLES.find((role) => role.id === activeRole);
+    if (hint && current) hint.textContent = current.hint;
+  }
+
+  function escapeHtml(str) {
+    return (str || '').replace(/[&<>"']/g, ch => ({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+    }[ch]));
+  }
+
+  function renderResults(data) {
+    const el = document.getElementById('results');
+    const meta = document.getElementById('search-meta');
+
+    if (!data.results.length) {
+      meta.textContent = `Ничего не нашлось по запросу «${data.query}» для роли «${data.role}». Смените роль или формулировку.`;
+      el.innerHTML = `
+        <div class="text-dim text-sm border border-dashed border-line rounded-xl px-4 py-8 text-center">
+          Для этой роли подходящих кусков нет.
+        </div>`;
+      return;
+    }
+
+    meta.textContent = data.count === 1
+      ? `1 кусок по запросу «${data.query}»`
+      : `${data.count} кусков по запросу «${data.query}»`;
+
+    el.innerHTML = data.results.map(hit => {
+      const color = kindColor(hit.kind);
+      const loc = hit.start_line
+        ? `${hit.path}:${hit.start_line}${hit.end_line ? '-' + hit.end_line : ''}`
+        : hit.path;
+      const httpBadge = (hit.http_method && hit.api_path)
+        ? `<span class="text-[11px] font-mono px-1.5 py-0.5 rounded border border-line text-ink ml-2">${escapeHtml(hit.http_method)} ${escapeHtml(hit.api_path)}</span>`
+        : '';
+      const score = hit.rrf_score != null ? `rrf ${hit.rrf_score.toFixed(4)}` : '';
+
+      return `
+        <article class="bg-surface border border-line rounded-xl overflow-hidden" style="border-left: 3px solid ${color}">
+          <div class="flex items-center justify-between gap-3 px-4 pt-3">
+            <div class="flex items-center gap-2 min-w-0">
+              <span class="kind-dot" style="background:${color}"></span>
+              <span class="text-xs font-mono text-dim truncate">${escapeHtml(loc)}</span>
+              ${httpBadge}
+            </div>
+            <div class="flex items-center gap-2 shrink-0">
+              <span class="text-[11px] font-mono uppercase tracking-wide" style="color:${color}">${escapeHtml(hit.kind || 'chunk')}</span>
+            </div>
+          </div>
+          <div class="px-4 pt-1.5 pb-1 text-sm font-medium text-ink/90">${escapeHtml(hit.name || '')}</div>
+          <pre class="snippet text-xs font-mono text-ink/80 bg-surface2 mx-4 mb-4 mt-2 p-3 rounded-lg overflow-x-auto max-h-56">${escapeHtml(hit.document)}</pre>
+          <div class="px-4 pb-3 -mt-2 text-[11px] text-dim font-mono">${score}</div>
+        </article>
+      `;
+    }).join('');
+  }
+
+  async function runSearch() {
+    const query = document.getElementById('query').value.trim();
+    const limit = parseInt(document.getElementById('limit').value, 10);
+    const meta = document.getElementById('search-meta');
+    if (!query) return;
+
+    meta.textContent = 'Ищем…';
+    try {
+      const res = await fetch('/api/search', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query, role: activeRole, limit }),
+      });
+      if (res.status === 423) {
+        meta.textContent = 'Vault is locked. Enter the project passphrase.';
+        return;
+      }
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      for (const hit of data.results) {
+        hit.document = await decryptDocument(hit.document);
+      }
+      renderResults(data);
+    } catch (err) {
+      meta.textContent = `Search failed: ${err.message}. Is the server running?`;
+    }
+  }
+
+  let vaultKey = null;
+  let vaultSalt = null;
+
+  async function decryptDocument(stored) {
+    if (!stored || !stored.startsWith('enc1:')) return stored;
+    const pass = sessionStorage.getItem('hub_passphrase');
+    if (!pass) return 'Locked. Enter the project passphrase in this browser.';
+    if (!vaultKey) {
+      const status = await fetch('/api/vault').then((response) => response.json());
+      vaultSalt = Uint8Array.from(atob(status.salt_b64), (char) => char.charCodeAt(0));
+      const material = await crypto.subtle.importKey(
+        'raw',
+        new TextEncoder().encode(pass),
+        'PBKDF2',
+        false,
+        ['deriveKey'],
+      );
+      vaultKey = await crypto.subtle.deriveKey(
+        { name: 'PBKDF2', salt: vaultSalt, iterations: status.pbkdf2_iterations, hash: 'SHA-256' },
+        material,
+        { name: 'AES-GCM', length: 256 },
+        false,
+        ['decrypt'],
+      );
+    }
+    const raw = Uint8Array.from(atob(stored.slice(5)), (char) => char.charCodeAt(0));
+    const plain = await crypto.subtle.decrypt(
+      { name: 'AES-GCM', iv: raw.slice(0, 12) },
+      vaultKey,
+      raw.slice(12),
+    );
+    return new TextDecoder().decode(plain);
+  }
+
+  async function refreshVault() {
+    const status = await fetch('/api/vault').then((response) => response.json());
+    const mb = (status.storage_bytes / (1024 * 1024)).toFixed(2);
+    const limit = (status.storage_limit_bytes / (1024 * 1024)).toFixed(0);
+    document.getElementById('vault-status').textContent =
+      `${status.locked ? 'Locked' : 'Unlocked in hub memory'} · seats ${status.seats_used}/${status.seat_limit} · storage ${mb}/${limit} MB`;
+  }
+
+  async function unlockVault() {
+    const pass = document.getElementById('vault-pass').value;
+    const response = await fetch('/api/vault/unlock', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ passphrase: pass }),
+    });
+    if (!response.ok) {
+      document.getElementById('vault-status').textContent = 'Passphrase must be at least 8 characters.';
+      return;
+    }
+    sessionStorage.setItem('hub_passphrase', pass);
+    vaultKey = null;
+    await refreshVault();
+    if (document.getElementById('query').value.trim()) runSearch();
+  }
+
+  async function lockVault() {
+    await fetch('/api/vault/lock', { method: 'POST' });
+    sessionStorage.removeItem('hub_passphrase');
+    vaultKey = null;
+    await refreshVault();
+  }
+
+  async function loadStats() {
+    const statusDot = document.getElementById('status-dot');
+    const statusText = document.getElementById('status-text');
+    try {
+      const res = await fetch('/api/stats');
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+
+      document.getElementById('stat-files').textContent = data.files_indexed;
+      document.getElementById('stat-chunks').textContent = data.chunks_indexed;
+
+      const kindsEntries = Object.entries(data.kinds || {});
+      document.getElementById('stat-top-kind').textContent = kindsEntries.length ? kindsEntries[0][0] : '—';
+
+      statusText.textContent = data.status;
+      statusDot.classList.remove('pulse');
+      statusDot.style.background = data.status === 'ok' ? '#e6e6e6' : '#6b6b6b';
+
+      const breakdown = document.getElementById('kind-breakdown');
+      if (!kindsEntries.length) {
+        breakdown.innerHTML = '<div class="text-dim">No chunks indexed yet.</div>';
+      } else {
+        const max = Math.max(...kindsEntries.map(([, c]) => c));
+        breakdown.innerHTML = kindsEntries.map(([kind, count]) => {
+          const color = kindColor(kind);
+          const pct = Math.max(6, Math.round((count / max) * 100));
+          return `
+            <div>
+              <div class="flex items-center justify-between text-dim mb-1">
+                <span style="color:${color}" class="font-mono">${escapeHtml(kind)}</span>
+                <span class="font-mono">${count}</span>
+              </div>
+              <div class="h-1.5 rounded-full bg-surface2 overflow-hidden">
+                <div class="h-full rounded-full" style="width:${pct}%; background:${color}"></div>
+              </div>
+            </div>`;
+        }).join('');
+      }
+    } catch (err) {
+      statusText.textContent = 'unreachable';
+      statusDot.classList.remove('pulse');
+      statusDot.style.background = '#ff6b6b';
+    }
+  }
+
+  document.getElementById('search-form').addEventListener('submit', (e) => {
+    e.preventDefault();
+    runSearch();
+  });
+
+  document.getElementById('mcp-url').textContent = `${window.location.origin}/mcp/sse`;
+
+  document.getElementById('copy-btn').addEventListener('click', async () => {
+    const text = document.getElementById('mcp-url').textContent;
+    try {
+      await navigator.clipboard.writeText(text);
+      const row = document.getElementById('mcp-url-row');
+      row.classList.add('copy-flash');
+      setTimeout(() => row.classList.remove('copy-flash'), 500);
+    } catch (e) { /* clipboard unavailable, ignore silently */ }
+  });
+
+  renderRolePills();
+  document.querySelectorAll('.example-query').forEach((button) => {
+    button.addEventListener('click', () => {
+      if (button.dataset.role) activeRole = button.dataset.role;
+      renderRolePills();
+      document.getElementById('query').value = button.dataset.query;
+      runSearch();
+    });
+  });
+  loadStats();
+  setInterval(loadStats, 15000);
+  initProof();
+
+  function proofError(message) {
+    const el = document.getElementById('proof-error');
+    el.textContent = message || '';
+    el.classList.toggle('hidden', !message);
+  }
+
+  function bytesToB64(bytes) {
+    const arr = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
+    let binary = '';
+    for (let i = 0; i < arr.length; i += 1) binary += String.fromCharCode(arr[i]);
+    return btoa(binary);
+  }
+
+  async function hubApi(path, options = {}) {
+    const headers = { 'Content-Type': 'application/json', ...(options.headers || {}) };
+    const token = sessionStorage.getItem('hub_token');
+    if (token) headers.Authorization = `Bearer ${token}`;
+    const response = await fetch(path, { ...options, headers });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      const error = new Error(data.detail || `HTTP ${response.status}`);
+      error.detail = data.detail || '';
+      throw error;
+    }
+    return data;
+  }
+
+  function renderWallet(address) {
+    const status = document.getElementById('wallet-status');
+    const disconnect = document.getElementById('wallet-disconnect');
+    const anchor = document.getElementById('anchor-btn');
+    if (!address) {
+      status.textContent = 'Wallet not connected';
+      disconnect.classList.add('hidden');
+      anchor.disabled = true;
+      return;
+    }
+    status.textContent = address;
+    disconnect.classList.remove('hidden');
+    anchor.disabled = false;
+  }
+
+  async function refreshProof() {
+    const status = document.getElementById('proof-status');
+    const link = document.getElementById('proof-link');
+    const agent = document.getElementById('agent-view');
+    try {
+      const proof = await hubApi('/api/contracts/auth/proof');
+      if (!proof.anchored) {
+        status.textContent = 'No release yet. The agent reads the current slice.';
+        link.classList.add('hidden');
+      } else {
+        status.textContent = proof.matches
+          ? `Frontend and Flutter receive the release at slot ${proof.slot}.`
+          : `Draft is ahead of slot ${proof.slot}. Those agents still receive the release.`;
+        link.href = proof.explorer;
+        link.textContent = proof.signature;
+        link.classList.remove('hidden');
+      }
+    } catch (error) {
+      status.textContent = 'Proof status unavailable.';
+      proofError(error.message);
+    }
+    try {
+      const view = await hubApi('/api/contracts/auth/agent?method=POST&path=' + encodeURIComponent('/api/v1/auth/login') + '&role=frontend');
+      agent.textContent = view.text;
+    } catch (error) {
+      agent.textContent = error.detail || error.message || 'Agent view unavailable.';
+    }
+  }
+
+  async function connectWallet() {
+    proofError('');
+    const provider = window.solana;
+    if (!provider?.isPhantom) {
+      proofError('Phantom was not found in this browser.');
+      return;
+    }
+    try {
+      await provider.connect();
+      const address = provider.publicKey.toString();
+      const nonce = await hubApi('/api/wallet/nonce', {
+        method: 'POST',
+        body: JSON.stringify({ address }),
+      });
+      const signed = await provider.signMessage(new TextEncoder().encode(nonce.message), 'utf8');
+      const session = await hubApi('/api/wallet/verify', {
+        method: 'POST',
+        body: JSON.stringify({
+          address,
+          nonce: nonce.nonce,
+          signature_b64: bytesToB64(signed.signature),
+        }),
+      });
+      sessionStorage.setItem('hub_token', session.token);
+      renderWallet(address);
+    } catch (error) {
+      if (error?.code === 4001) {
+        proofError('Signature cancelled.');
+        return;
+      }
+      proofError(error.detail || error.message || 'Wallet connection failed.');
+    }
+  }
+
+  async function disconnectWallet() {
+    const token = sessionStorage.getItem('hub_token');
+    sessionStorage.removeItem('hub_token');
+    renderWallet('');
+    try {
+      if (token) await hubApi('/api/wallet/logout', { method: 'POST', body: '{}' });
+    } catch (error) { /* session may already be gone */ }
+    if (window.solana?.disconnect) {
+      try { await window.solana.disconnect(); } catch (error) { /* user may already be disconnected */ }
+    }
+  }
+
+  async function anchorContract() {
+    proofError('');
+    const button = document.getElementById('anchor-btn');
+    const status = document.getElementById('proof-status');
+    button.disabled = true;
+    try {
+      const provider = window.solana;
+      if (!provider?.publicKey) throw new Error('Connect a wallet first.');
+      status.textContent = 'Preparing the hash…';
+      const prepared = await hubApi('/api/contracts/prepare', {
+        method: 'POST',
+        body: JSON.stringify({ service: 'auth' }),
+      });
+      const web3 = await import('https://esm.sh/@solana/web3.js@1.98.4');
+      const connection = new web3.Connection(prepared.rpc, 'confirmed');
+      const payer = new web3.PublicKey(provider.publicKey.toString());
+      const instruction = new web3.TransactionInstruction({
+        keys: [{ pubkey: payer, isSigner: true, isWritable: false }],
+        programId: new web3.PublicKey('MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr'),
+        data: new TextEncoder().encode(prepared.memo),
+      });
+      const transaction = new web3.Transaction().add(instruction);
+      transaction.feePayer = payer;
+      const latest = await connection.getLatestBlockhash('confirmed');
+      transaction.recentBlockhash = latest.blockhash;
+      status.textContent = 'Waiting for the wallet signature…';
+      const signed = await provider.signTransaction(transaction);
+      status.textContent = 'Sending to devnet…';
+      const signature = await connection.sendRawTransaction(signed.serialize());
+      await connection.confirmTransaction({
+        signature,
+        blockhash: latest.blockhash,
+        lastValidBlockHeight: latest.lastValidBlockHeight,
+      }, 'confirmed');
+      status.textContent = 'Checking the transaction on the RPC…';
+      const confirmed = await hubApi('/api/contracts/confirm', {
+        method: 'POST',
+        body: JSON.stringify({ service: 'auth', signature }),
+      });
+      if (!confirmed.confirmed_by_rpc) throw new Error('The server did not confirm the transaction.');
+      await refreshProof();
+    } catch (error) {
+      if (error?.code === 4001) proofError('Signature cancelled.');
+      else if (error.detail === 'vault_locked') proofError('Unlock the project vault before anchoring. The release snapshot must be encrypted.');
+      else proofError(error.detail || error.message || 'Anchor failed.');
+      status.textContent = 'Anchor was not confirmed.';
+    } finally {
+      button.disabled = !sessionStorage.getItem('hub_token');
+    }
+  }
+
+  function initProof() {
+    document.getElementById('wallet-btn').addEventListener('click', connectWallet);
+    document.getElementById('wallet-disconnect').addEventListener('click', disconnectWallet);
+    document.getElementById('anchor-btn').addEventListener('click', anchorContract);
+    document.getElementById('vault-unlock').addEventListener('click', unlockVault);
+    document.getElementById('vault-lock').addEventListener('click', lockVault);
+    refreshVault();
+    const token = sessionStorage.getItem('hub_token');
+    if (token && window.solana?.publicKey) renderWallet(window.solana.publicKey.toString());
+    refreshProof();
+  }
+</script>
+</body>
+</html>

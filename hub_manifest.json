@@ -1,0 +1,11 @@
+{
+  "project": "Auth sample",
+  "services": [
+    {
+      "name": "auth",
+      "owner": "backend",
+      "consumers": ["frontend", "flutter"],
+      "contracts": ["test_sample/openapi.json"]
+    }
+  ]
+}

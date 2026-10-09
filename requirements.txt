@@ -1,0 +1,17 @@
+fastmcp
+chromadb
+pathspec
+watchdog
+fastapi
+uvicorn[standard]
+python-multipart
+pypdf
+python-docx
+beautifulsoup4
+pyyaml
+rank-bm25
+pynacl
+base58
+httpx
+pytest
+cryptography

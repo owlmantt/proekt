@@ -1,0 +1,11 @@
+venv/
+.venv/
+node_modules/
+dist/
+build/
+__pycache__/
+chroma_db/
+hub_data/
+.env
+*.pyc
+.DS_Store

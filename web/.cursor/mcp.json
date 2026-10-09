@@ -1,0 +1,7 @@
+{
+  "mcpServers": {
+    "context-hub": {
+      "url": "http://localhost:8000/mcp/sse"
+    }
+  }
+}
