@@ -78,7 +78,12 @@ def protect_collection(collection) -> int:
             sealed_ids.append(doc_id)
             sealed_docs.append(seal(document, key))
     if sealed_ids:
-        collection.update(ids=sealed_ids, documents=sealed_docs)
+        batch = 40
+        for start in range(0, len(sealed_ids), batch):
+            collection.update(
+                ids=sealed_ids[start:start + batch],
+                documents=sealed_docs[start:start + batch],
+            )
     return len(sealed_ids)
 
 

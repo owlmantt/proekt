@@ -366,14 +366,20 @@
   }
 
   async function unlockVault() {
+    const status = document.getElementById('vault-status');
     const pass = document.getElementById('vault-pass').value;
+    if (pass.trim().length < 8) {
+      status.textContent = 'Пароль должен быть не короче 8 символов.';
+      return;
+    }
+    status.textContent = 'Открываем…';
     const response = await fetch('/api/vault/unlock', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ passphrase: pass }),
     });
     if (!response.ok) {
-      document.getElementById('vault-status').textContent = 'Passphrase must be at least 8 characters.';
+      status.textContent = 'Сервер не открыл хранилище. Подождите минуту и нажмите «Открыть» ещё раз.';
       return;
     }
     sessionStorage.setItem('hub_passphrase', pass);

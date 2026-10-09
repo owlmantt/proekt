@@ -322,8 +322,13 @@ def mount_wallet_api(app: FastAPI, root: Path, collection=None) -> None:
             unlock(body.passphrase)
         except ValueError as exc:
             raise HTTPException(status_code=400, detail="short_passphrase") from exc
-        sealed = protect_collection(collection) if collection is not None else 0
-        protect_text_file(BM25_INDEX_PATH)
+        sealed = 0
+        try:
+            if collection is not None:
+                sealed = protect_collection(collection)
+            protect_text_file(BM25_INDEX_PATH)
+        except Exception:
+            sealed = 0
         return {"locked": False, "sealed_chunks": sealed}
 
     @app.post("/api/vault/lock")
