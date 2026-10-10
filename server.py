@@ -480,7 +480,7 @@ app.add_middleware(RateLimitMiddleware)
 mount_wallet_api(app, PROJECT_ROOT, collection)
 
 UPLOAD_DIR = PROJECT_ROOT / "uploads"
-MAX_UPLOAD_BYTES = 2_000_000
+MAX_UPLOAD_BYTES = 8_000_000
 
 
 @app.post("/api/uploads")

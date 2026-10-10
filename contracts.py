@@ -47,6 +47,14 @@ def discover_contracts(root: Path) -> list[Path]:
 
 def contract_files(root: Path) -> list[Path]:
     root = root.resolve()
+    uploaded: list[Path] = []
+    upload_dir = root / "uploads"
+    if upload_dir.is_dir():
+        uploaded = sorted(
+            (path for path in upload_dir.glob("*.json") if path.is_file()),
+            key=lambda path: path.stat().st_mtime,
+            reverse=True,
+        )
     manifest = load_manifest(root)
     listed: list[Path] = []
     for service in manifest.get("services") or []:
@@ -56,7 +64,16 @@ def contract_files(root: Path) -> list[Path]:
             path = (root / str(rel)).resolve()
             if path.is_file():
                 listed.append(path)
-    return listed or discover_contracts(root)
+    discovered = listed or discover_contracts(root)
+    result: list[Path] = []
+    seen: set[str] = set()
+    for path in [*uploaded, *discovered]:
+        key = str(path.resolve())
+        if key in seen:
+            continue
+        seen.add(key)
+        result.append(path)
+    return result
 
 
 def load_spec(path: Path) -> dict:

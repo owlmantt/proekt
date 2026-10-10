@@ -100,6 +100,7 @@
       <h2 class="text-sm font-medium mb-1">3. Ask</h2>
       <p class="text-sm text-dim mb-3">Use an example, or type your own question.</p>
       <div class="flex flex-wrap gap-2 mb-3">
+        <button type="button" class="example-query border border-line rounded-md px-3 py-1.5 text-sm text-dim hover:text-ink" data-query="pay for an order with a saved card" data-role="frontend">Pay for an order</button>
         <button type="button" class="example-query border border-line rounded-md px-3 py-1.5 text-sm text-dim hover:text-ink" data-query="login endpoint" data-role="frontend">Login endpoint</button>
         <button type="button" class="example-query border border-line rounded-md px-3 py-1.5 text-sm text-dim hover:text-ink" data-query="JWT_SECRET" data-role="backend">Where is the JWT secret</button>
       </div>
@@ -314,7 +315,7 @@
     const meta = document.getElementById('search-meta');
     if (!query) return;
 
-    meta.textContent = 'Searching…';
+    meta.textContent = 'Searching… the first question can take up to a minute.';
     try {
       const res = await fetch('/api/search', {
         method: 'POST',
