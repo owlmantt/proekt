@@ -488,18 +488,29 @@
       status.textContent = 'Choose a file first.';
       return;
     }
-    status.textContent = 'Uploading…';
     const body = new FormData();
     for (const file of input.files) body.append('files', file);
+    status.textContent = 'Sending the file…';
     const response = await fetch('/api/uploads', { method: 'POST', body });
-    const data = await response.json().catch(() => ({}));
     if (!response.ok) {
-      status.textContent = 'This file type is not supported.';
+      status.textContent = 'Upload failed. Use a JSON, Python, Markdown, or YAML file under 8 MB.';
       return;
     }
-    status.textContent = (data.saved || []).join(' ');
     input.value = '';
-    loadStats();
+    status.textContent = 'File accepted. Cutting it into pieces… this can take a few minutes.';
+    const started = Date.now();
+    while (Date.now() - started < 8 * 60 * 1000) {
+      await new Promise((resolve) => setTimeout(resolve, 3000));
+      const stateResponse = await fetch('/api/uploads/status');
+      const state = await stateResponse.json().catch(() => ({}));
+      if (!state.running) {
+        status.textContent = state.message || 'Upload finished.';
+        loadStats();
+        return;
+      }
+      status.textContent = state.message || 'Cutting the file into pieces…';
+    }
+    status.textContent = 'Still working. Wait a little longer, then refresh the file count.';
   });
   document.getElementById('clear-index').addEventListener('click', async () => {
     const status = document.getElementById('upload-status');

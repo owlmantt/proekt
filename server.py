@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import os
 import re
+import threading
 import time
 from collections import Counter
 from pathlib import Path
@@ -481,13 +482,26 @@ mount_wallet_api(app, PROJECT_ROOT, collection)
 
 UPLOAD_DIR = PROJECT_ROOT / "uploads"
 MAX_UPLOAD_BYTES = 8_000_000
+_upload_state = {"running": False, "message": ""}
+_upload_lock = threading.Lock()
+
+
+def _index_upload(path: Path) -> None:
+    try:
+        message = index_single_file(path)
+    except Exception as exc:
+        message = f"Indexing failed: {exc}"
+    with _upload_lock:
+        _upload_state["running"] = False
+        _upload_state["message"] = message
 
 
 @app.post("/api/uploads")
 async def upload_files(files: list[UploadFile] = File(...)) -> dict:
     UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
-    saved: list[str] = []
+    accepted: list[str] = []
     rejected: list[str] = []
+    queued: Path | None = None
     for item in files:
         name = Path(item.filename or "").name
         suffix = Path(name).suffix.lower()
@@ -500,10 +514,21 @@ async def upload_files(files: list[UploadFile] = File(...)) -> dict:
             continue
         destination = UPLOAD_DIR / name
         destination.write_bytes(data)
-        saved.append(index_single_file(destination))
-    if not saved and rejected:
+        accepted.append(name)
+        queued = destination
+    if queued is None:
         raise HTTPException(status_code=400, detail="unsupported_file")
-    return {"saved": saved, "rejected": rejected}
+    with _upload_lock:
+        _upload_state["running"] = True
+        _upload_state["message"] = f"Indexing {queued.name}…"
+    threading.Thread(target=_index_upload, args=(queued,), daemon=True).start()
+    return {"accepted": accepted, "rejected": rejected, "indexing": True}
+
+
+@app.get("/api/uploads/status")
+def upload_status() -> dict:
+    with _upload_lock:
+        return dict(_upload_state)
 
 
 @app.post("/api/index/clear")
