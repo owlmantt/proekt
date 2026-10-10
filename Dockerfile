@@ -11,8 +11,6 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
-RUN python indexer.py
-
 ENV HUB_PUBLIC=1 \
     HUB_DB=/data/hub.db \
     HUB_SOLANA_CLUSTER=devnet \

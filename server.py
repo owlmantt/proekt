@@ -20,7 +20,7 @@ from collections import Counter
 from pathlib import Path
 
 import chromadb
-from fastapi import FastAPI
+from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -35,7 +35,7 @@ from wallet_api import agent_context, mount_wallet_api, proof_text
 
 from contracts import format_budget, format_client_context, format_errors, format_manifest, measure_context
 from hybrid_search import hybrid_search
-from indexer import PROJECT_ROOT, is_indexable_file
+from indexer import ALLOWED_EXTENSIONS, PROJECT_ROOT, clear_index, index_single_file, is_indexable_file
 from roles import allows
 
 CHROMA_PATH = "./chroma_db"
@@ -478,6 +478,38 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
 app.add_middleware(RateLimitMiddleware)
 
 mount_wallet_api(app, PROJECT_ROOT, collection)
+
+UPLOAD_DIR = PROJECT_ROOT / "uploads"
+MAX_UPLOAD_BYTES = 2_000_000
+
+
+@app.post("/api/uploads")
+async def upload_files(files: list[UploadFile] = File(...)) -> dict:
+    UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+    saved: list[str] = []
+    rejected: list[str] = []
+    for item in files:
+        name = Path(item.filename or "").name
+        suffix = Path(name).suffix.lower()
+        if not name or suffix not in ALLOWED_EXTENSIONS:
+            rejected.append(name or "unnamed")
+            continue
+        data = await item.read()
+        if len(data) > MAX_UPLOAD_BYTES:
+            rejected.append(name)
+            continue
+        destination = UPLOAD_DIR / name
+        destination.write_bytes(data)
+        saved.append(index_single_file(destination))
+    if not saved and rejected:
+        raise HTTPException(status_code=400, detail="unsupported_file")
+    return {"saved": saved, "rejected": rejected}
+
+
+@app.post("/api/index/clear")
+def clear_uploaded_index() -> dict:
+    clear_index()
+    return {"ok": True}
 
 
 @app.post("/api/search", response_model=SearchResponse)

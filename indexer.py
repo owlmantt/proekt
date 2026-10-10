@@ -300,5 +300,23 @@ def index_codebase() -> None:
     )
 
 
+def clear_index() -> None:
+    """Удаляет индекс и загруженные файлы. Каталог проекта не трогает."""
+    client = get_client()
+    names = [item.name for item in client.list_collections()]
+    if COLLECTION_NAME in names:
+        client.delete_collection(COLLECTION_NAME)
+    if HASHES_PATH.exists():
+        HASHES_PATH.unlink()
+    bm25_path = Path(CHROMA_PATH) / "bm25_index.json"
+    if bm25_path.exists():
+        bm25_path.unlink()
+    upload_dir = PROJECT_ROOT / "uploads"
+    if upload_dir.is_dir():
+        for child in upload_dir.iterdir():
+            if child.is_file():
+                child.unlink()
+
+
 if __name__ == "__main__":
     index_codebase()

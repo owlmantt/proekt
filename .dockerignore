@@ -6,6 +6,7 @@ build/
 __pycache__/
 chroma_db/
 hub_data/
+uploads/
 .git/
 *.pyc
 .env

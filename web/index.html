@@ -73,116 +73,129 @@
   <main class="max-w-3xl mx-auto px-5 py-10">
 
     <header class="mb-8">
-      <h1 class="text-2xl font-semibold tracking-tight">Контекст для ИИ</h1>
-      <p class="text-dim mt-2 leading-relaxed">Здесь ИИ спрашивает про проект и получает короткий ответ. Фронтенд не читает весь код сервера: он спрашивает про ручку и видит поля запроса.</p>
+      <h1 class="text-2xl font-semibold tracking-tight">Context for AI agents</h1>
+      <p class="text-dim mt-2 leading-relaxed">An agent asks one question and gets a short piece of the project. A frontend agent sees the API fields, not the whole server.</p>
     </header>
 
     <section class="mb-8">
-      <h2 class="text-sm font-medium mb-1">Кто спрашивает</h2>
-      <p id="role-hint" class="text-sm text-dim mb-3">Сначала выберите роль. От неё зависит, что попадёт в ответ.</p>
+      <h2 class="text-sm font-medium mb-1">1. Add a file</h2>
+      <p class="text-sm text-dim mb-3">The index starts empty. Upload an OpenAPI file or a source file. JSON, Python, Markdown, and YAML work.</p>
+      <form id="upload-form" class="bg-surface border border-line rounded-xl p-4 flex flex-col gap-3">
+        <input id="upload-input" type="file" multiple accept=".json,.py,.md,.txt,.yaml,.yml,.ts,.tsx,.js,.html" class="text-sm text-dim" />
+        <div class="flex flex-wrap gap-2">
+          <button type="submit" class="bg-accent text-bg text-sm font-medium px-3 py-1.5 rounded-md">Upload</button>
+          <button type="button" id="clear-index" class="border border-line text-dim text-sm px-3 py-1.5 rounded-md">Clear index</button>
+        </div>
+        <div id="upload-status" class="text-xs text-dim"></div>
+      </form>
+    </section>
+
+    <section class="mb-8">
+      <h2 class="text-sm font-medium mb-1">2. Who is asking</h2>
+      <p id="role-hint" class="text-sm text-dim mb-3">Pick a role. It decides what the answer is allowed to include.</p>
       <div id="role-pills" class="flex flex-wrap gap-2"></div>
     </section>
 
     <section class="mb-8">
-      <h2 class="text-sm font-medium mb-1">О чём спросить</h2>
-      <p class="text-sm text-dim mb-3">Нажмите пример или напишите свой вопрос.</p>
+      <h2 class="text-sm font-medium mb-1">3. Ask</h2>
+      <p class="text-sm text-dim mb-3">Use an example, or type your own question.</p>
       <div class="flex flex-wrap gap-2 mb-3">
-        <button type="button" class="example-query border border-line rounded-md px-3 py-1.5 text-sm text-dim hover:text-ink" data-query="login endpoint" data-role="frontend">Ручка входа</button>
-        <button type="button" class="example-query border border-line rounded-md px-3 py-1.5 text-sm text-dim hover:text-ink" data-query="JWT_SECRET" data-role="backend">Где секрет JWT</button>
+        <button type="button" class="example-query border border-line rounded-md px-3 py-1.5 text-sm text-dim hover:text-ink" data-query="login endpoint" data-role="frontend">Login endpoint</button>
+        <button type="button" class="example-query border border-line rounded-md px-3 py-1.5 text-sm text-dim hover:text-ink" data-query="JWT_SECRET" data-role="backend">Where is the JWT secret</button>
       </div>
       <form id="search-form" class="glow-border flex flex-wrap items-center gap-3 bg-surface border border-line rounded-xl px-4 py-3">
         <input
           id="query"
           type="text"
           autocomplete="off"
-          placeholder="Например: ручка входа"
+          placeholder="For example: login endpoint"
           class="flex-1 min-w-[12rem] bg-transparent outline-none placeholder:text-dim/70 text-[15px]"
         />
         <select id="limit" class="bg-surface2 border border-line rounded-md text-xs px-2 py-1.5 text-dim outline-none" aria-label="Сколько ответов">
-          <option value="5">5 ответов</option>
-          <option value="8" selected>8 ответов</option>
-          <option value="15">15 ответов</option>
-          <option value="25">25 ответов</option>
+          <option value="5">5 answers</option>
+          <option value="8" selected>8 answers</option>
+          <option value="15">15 answers</option>
+          <option value="25">25 answers</option>
         </select>
-        <button type="submit" class="bg-accent text-bg text-sm font-medium px-4 py-1.5 rounded-md">Найти</button>
+        <button type="submit" class="bg-accent text-bg text-sm font-medium px-4 py-1.5 rounded-md">Search</button>
       </form>
       <div id="search-meta" class="text-xs text-dim mt-2 min-h-[16px]"></div>
     </section>
 
     <section class="mb-10">
-      <h2 class="text-sm font-medium mb-3">Ответ</h2>
+      <h2 class="text-sm font-medium mb-3">Answer</h2>
       <div id="results" class="flex flex-col gap-3 min-h-[80px]">
         <div class="text-dim text-sm border border-dashed border-line rounded-xl px-4 py-8 text-center">
-          Здесь появится короткий кусок проекта, а не весь репозиторий.
+          Upload a file, then ask. The answer will be a short piece, not the whole repository.
         </div>
       </div>
     </section>
 
     <section class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-10 text-sm">
       <div>
-        <div class="text-dim text-xs">Файлов</div>
+        <div class="text-dim text-xs">Files</div>
         <div id="stat-files" class="text-xl font-semibold mt-1 font-mono">—</div>
       </div>
       <div>
-        <div class="text-dim text-xs">Кусков текста</div>
+        <div class="text-dim text-xs">Pieces</div>
         <div id="stat-chunks" class="text-xl font-semibold mt-1 font-mono">—</div>
       </div>
       <div>
-        <div class="text-dim text-xs">Индекс</div>
+        <div class="text-dim text-xs">Index</div>
         <div id="stat-status" class="text-xl font-semibold mt-1 flex items-center gap-2">
           <span id="status-dot" class="w-2 h-2 rounded-full bg-dim"></span>
-          <span id="status-text" class="font-mono text-base">проверка</span>
+          <span id="status-text" class="font-mono text-base">checking</span>
         </div>
       </div>
       <div>
-        <div class="text-dim text-xs">Чаще всего</div>
+        <div class="text-dim text-xs">Most common</div>
         <div id="stat-top-kind" class="text-xl font-semibold mt-1 font-mono">—</div>
       </div>
     </section>
 
     <section class="flex flex-col gap-4 border-t border-line pt-8">
-      <h2 class="text-sm font-medium">Дальше, если нужно</h2>
+      <h2 class="text-sm font-medium">Later, if you need it</h2>
 
       <div class="bg-surface border border-line rounded-xl p-4">
-        <h3 class="text-sm font-medium">Закрыть тексты паролем</h3>
-        <p class="text-sm text-dim mt-1 mb-3">Поиск выше работает и без пароля. Пароль нужен, чтобы скопированная база не читалась. На этой машине текст расшифровывается в браузере.</p>
-        <input id="vault-pass" type="password" autocomplete="current-password" placeholder="Пароль проекта, от 8 символов" class="w-full bg-surface2 border border-line rounded-md text-sm px-3 py-2 outline-none mb-3" />
+        <h3 class="text-sm font-medium">Lock the text with a password</h3>
+        <p class="text-sm text-dim mt-1 mb-3">Search works without a password. The password keeps a copied database unreadable. This browser decrypts the text on your machine.</p>
+        <input id="vault-pass" type="password" autocomplete="current-password" placeholder="Project password, at least 8 characters" class="w-full bg-surface2 border border-line rounded-md text-sm px-3 py-2 outline-none mb-3" />
         <div class="flex flex-wrap gap-2">
-          <button type="button" id="vault-unlock" class="bg-accent text-bg text-sm font-medium px-3 py-1.5 rounded-md">Открыть</button>
-          <button type="button" id="vault-lock" class="border border-line text-dim text-sm px-3 py-1.5 rounded-md">Закрыть</button>
+          <button type="button" id="vault-unlock" class="bg-accent text-bg text-sm font-medium px-3 py-1.5 rounded-md">Unlock</button>
+          <button type="button" id="vault-lock" class="border border-line text-dim text-sm px-3 py-1.5 rounded-md">Lock</button>
         </div>
-        <div id="vault-status" class="text-xs text-dim mt-3">Проверяем хранилище…</div>
+        <div id="vault-status" class="text-xs text-dim mt-3">Checking the vault…</div>
       </div>
 
       <div class="bg-surface border border-line rounded-xl p-4">
-        <h3 class="text-sm font-medium">Зафиксировать версию API</h3>
-        <p class="text-sm text-dim mt-1 mb-3">Пока версию не выпускали, фронтенд читает текущий файл. После выпуска он продолжает видеть эту версию, даже если файл уже изменили. В сеть уходит только хеш, не сам текст.</p>
-        <div id="wallet-status" class="text-xs text-dim break-all mb-3">Кошелёк не подключён</div>
+        <h3 class="text-sm font-medium">Publish an API version</h3>
+        <p class="text-sm text-dim mt-1 mb-3">Until you publish, the frontend reads the current file. After you publish, it keeps that version even if the file changes. Only a hash goes on-chain, not the text.</p>
+        <div id="wallet-status" class="text-xs text-dim break-all mb-3">Wallet not connected</div>
         <div class="flex flex-wrap gap-2 mb-3">
-          <button type="button" id="wallet-btn" class="bg-accent text-bg text-sm font-medium px-3 py-1.5 rounded-md">Подключить кошелёк</button>
-          <button type="button" id="wallet-disconnect" class="hidden border border-line text-dim text-sm px-3 py-1.5 rounded-md">Отключить</button>
-          <button type="button" id="anchor-btn" class="border border-line text-ink text-sm px-3 py-1.5 rounded-md disabled:opacity-40" disabled>Выпустить версию</button>
+          <button type="button" id="wallet-btn" class="bg-accent text-bg text-sm font-medium px-3 py-1.5 rounded-md">Connect wallet</button>
+          <button type="button" id="wallet-disconnect" class="hidden border border-line text-dim text-sm px-3 py-1.5 rounded-md">Disconnect</button>
+          <button type="button" id="anchor-btn" class="border border-line text-ink text-sm px-3 py-1.5 rounded-md disabled:opacity-40" disabled>Publish version</button>
         </div>
-        <div id="proof-status" class="text-sm text-dim">Проверяем, выпущена ли версия…</div>
+        <div id="proof-status" class="text-sm text-dim">Checking whether a version is published…</div>
         <a id="proof-link" class="hidden text-xs text-ink underline break-all mt-2" target="_blank" rel="noreferrer"></a>
         <div id="proof-error" class="hidden text-sm text-ink mt-2"></div>
-        <p class="text-xs text-dim mt-4 mb-1.5">Что получит фронтенд-агент по ручке входа</p>
-        <pre id="agent-view" class="text-[12px] font-mono text-ink/90 bg-surface2 p-3 rounded-lg overflow-x-auto max-h-64 whitespace-pre-wrap">Загружаем…</pre>
+        <p class="text-xs text-dim mt-4 mb-1.5">What the frontend agent receives for the login endpoint</p>
+        <pre id="agent-view" class="text-[12px] font-mono text-ink/90 bg-surface2 p-3 rounded-lg overflow-x-auto max-h-64 whitespace-pre-wrap">Loading…</pre>
       </div>
 
       <div class="bg-surface border border-line rounded-xl p-4">
-        <h3 class="text-sm font-medium">Подключить своего ИИ</h3>
-        <p class="text-sm text-dim mt-1 mb-3">Скопируйте адрес в Cursor, Claude или VS Code. Агент спрашивает одну ручку, а не весь файл API.</p>
+        <h3 class="text-sm font-medium">Connect your agent</h3>
+        <p class="text-sm text-dim mt-1 mb-3">Copy this address into Cursor, Claude, or VS Code. The agent asks for one endpoint, not the whole API file.</p>
         <div id="mcp-url-row" class="flex items-center gap-2 bg-surface2 border border-line rounded-lg px-3 py-2">
           <code id="mcp-url" class="text-xs font-mono text-ink truncate flex-1">http://localhost:8000/mcp/sse</code>
-          <button id="copy-btn" type="button" class="text-xs text-dim hover:text-ink shrink-0">Копировать</button>
+          <button id="copy-btn" type="button" class="text-xs text-dim hover:text-ink shrink-0">Copy</button>
         </div>
       </div>
 
       <div>
-        <h3 class="text-sm font-medium mb-3">Из чего состоит индекс</h3>
+        <h3 class="text-sm font-medium mb-3">What is in the index</h3>
         <div id="kind-breakdown" class="flex flex-col gap-2 text-xs">
-          <div class="text-dim">Загрузка…</div>
+          <div class="text-dim">Loading…</div>
         </div>
       </div>
     </section>
@@ -190,11 +203,11 @@
 
 <script>
   const ROLES = [
-    { id: 'all', label: 'Все', hint: 'Ответ может содержать и код, и описание API.' },
-    { id: 'frontend', label: 'Фронтенд', hint: 'Только описание API: ручки, поля и ошибки. Код сервера скрыт.' },
-    { id: 'flutter', label: 'Flutter', hint: 'То же, что у фронтенда: контракт API, без исходников бэкенда.' },
-    { id: 'backend', label: 'Бэкенд', hint: 'Код сервера и описание API.' },
-    { id: 'devops', label: 'DevOps', hint: 'Файлы инфраструктуры: yaml, Docker, настройки.' },
+    { id: 'all', label: 'All', hint: 'The answer can include both code and the API description.' },
+    { id: 'frontend', label: 'Frontend', hint: 'Only the API: endpoints, fields, and errors. Server code stays hidden.' },
+    { id: 'flutter', label: 'Flutter', hint: 'Same as frontend: the API contract, without backend source.' },
+    { id: 'backend', label: 'Backend', hint: 'Server code and the API description.' },
+    { id: 'devops', label: 'DevOps', hint: 'Infrastructure files: YAML, Docker, and config.' },
   ];
 
   const KIND_COLORS = {
@@ -253,17 +266,17 @@
     const meta = document.getElementById('search-meta');
 
     if (!data.results.length) {
-      meta.textContent = `Ничего не нашлось по запросу «${data.query}» для роли «${data.role}». Смените роль или формулировку.`;
+      meta.textContent = `Nothing matched “${data.query}” for this role. Try another role or question.`;
       el.innerHTML = `
         <div class="text-dim text-sm border border-dashed border-line rounded-xl px-4 py-8 text-center">
-          Для этой роли подходящих кусков нет.
+          No piece of the project matched this role.
         </div>`;
       return;
     }
 
     meta.textContent = data.count === 1
-      ? `1 кусок по запросу «${data.query}»`
-      : `${data.count} кусков по запросу «${data.query}»`;
+      ? `1 piece for “${data.query}”`
+      : `${data.count} pieces for “${data.query}”`;
 
     el.innerHTML = data.results.map(hit => {
       const color = kindColor(hit.kind);
@@ -301,7 +314,7 @@
     const meta = document.getElementById('search-meta');
     if (!query) return;
 
-    meta.textContent = 'Ищем…';
+    meta.textContent = 'Searching…';
     try {
       const res = await fetch('/api/search', {
         method: 'POST',
@@ -369,17 +382,17 @@
     const status = document.getElementById('vault-status');
     const pass = document.getElementById('vault-pass').value;
     if (pass.trim().length < 8) {
-      status.textContent = 'Пароль должен быть не короче 8 символов.';
+      status.textContent = 'Password must be at least 8 characters.';
       return;
     }
-    status.textContent = 'Открываем…';
+    status.textContent = 'Unlocking…';
     const response = await fetch('/api/vault/unlock', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ passphrase: pass }),
     });
     if (!response.ok) {
-      status.textContent = 'Сервер не открыл хранилище. Подождите минуту и нажмите «Открыть» ещё раз.';
+      status.textContent = 'The server did not unlock the vault. Wait a minute and try Unlock again.';
       return;
     }
     sessionStorage.setItem('hub_passphrase', pass);
@@ -415,7 +428,7 @@
 
       const breakdown = document.getElementById('kind-breakdown');
       if (!kindsEntries.length) {
-        breakdown.innerHTML = '<div class="text-dim">No chunks indexed yet.</div>';
+        breakdown.innerHTML = '<div class="text-dim">Nothing is indexed yet. Upload a file.</div>';
       } else {
         const max = Math.max(...kindsEntries.map(([, c]) => c));
         breakdown.innerHTML = kindsEntries.map(([kind, count]) => {
@@ -465,6 +478,34 @@
       document.getElementById('query').value = button.dataset.query;
       runSearch();
     });
+  });
+  document.getElementById('upload-form').addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const input = document.getElementById('upload-input');
+    const status = document.getElementById('upload-status');
+    if (!input.files.length) {
+      status.textContent = 'Choose a file first.';
+      return;
+    }
+    status.textContent = 'Uploading…';
+    const body = new FormData();
+    for (const file of input.files) body.append('files', file);
+    const response = await fetch('/api/uploads', { method: 'POST', body });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      status.textContent = 'This file type is not supported.';
+      return;
+    }
+    status.textContent = (data.saved || []).join(' ');
+    input.value = '';
+    loadStats();
+  });
+  document.getElementById('clear-index').addEventListener('click', async () => {
+    const status = document.getElementById('upload-status');
+    if (!window.confirm('Remove every file from the index?')) return;
+    const response = await fetch('/api/index/clear', { method: 'POST' });
+    status.textContent = response.ok ? 'Index cleared.' : 'Could not clear the index.';
+    loadStats();
   });
   loadStats();
   setInterval(loadStats, 15000);
