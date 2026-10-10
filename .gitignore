@@ -5,7 +5,7 @@ dist/
 build/
 __pycache__/
 chroma_db/
-uploads/
+hub_data/
 .env
 *.pyc
 .DS_Store
