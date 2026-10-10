@@ -326,6 +326,10 @@
         meta.textContent = 'Vault is locked. Enter the project passphrase.';
         return;
       }
+      if (res.status === 503) {
+        meta.textContent = 'The file is still being cut into pieces. Wait until that line finishes, then search.';
+        return;
+      }
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
       for (const hit of data.results) {
@@ -497,20 +501,32 @@
       return;
     }
     input.value = '';
-    status.textContent = 'File accepted. Cutting it into pieces… this can take a few minutes.';
+    status.textContent = 'File accepted. Cutting it into pieces… keep this tab open.';
     const started = Date.now();
     while (Date.now() - started < 8 * 60 * 1000) {
-      await new Promise((resolve) => setTimeout(resolve, 3000));
-      const stateResponse = await fetch('/api/uploads/status');
-      const state = await stateResponse.json().catch(() => ({}));
-      if (!state.running) {
-        status.textContent = state.message || 'Upload finished.';
-        loadStats();
-        return;
+      await new Promise((resolve) => setTimeout(resolve, 4000));
+      let state = null;
+      try {
+        const stateResponse = await fetch('/api/uploads/status');
+        if (!stateResponse.ok) throw new Error('status');
+        state = await stateResponse.json();
+      } catch (error) {
+        status.textContent = 'Still cutting the file. Keep this tab open.';
+        continue;
       }
-      status.textContent = state.message || 'Cutting the file into pieces…';
+      if (state.running) {
+        status.textContent = state.message || 'Cutting the file into pieces…';
+        continue;
+      }
+      if (!state.message) {
+        status.textContent = 'Still cutting the file. Keep this tab open.';
+        continue;
+      }
+      status.textContent = state.message;
+      loadStats();
+      return;
     }
-    status.textContent = 'Still working. Wait a little longer, then refresh the file count.';
+    status.textContent = 'Still working. Wait a little longer, then refresh the page.';
   });
   document.getElementById('clear-index').addEventListener('click', async () => {
     const status = document.getElementById('upload-status');

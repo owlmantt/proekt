@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import time
 from pathlib import Path
 
 import chromadb
@@ -107,6 +108,7 @@ def upsert_chunks(
     relative_path: str,
     content: str,
     extra_metadata: dict | None = None,
+    on_progress=None,
 ) -> list[tuple[str, str]]:
     chunks = chunk_file(Path(relative_path), content)
 
@@ -124,19 +126,29 @@ def upsert_chunks(
         metadatas.append(meta)
 
     chunk_ids = [chunk.chunk_id for chunk in chunks]
-    chunk_documents = [chunk.text for chunk in chunks]
+    # Длинные схемы не нужны целиком для поиска, а пачка из сотни
+    # полных документов роняет бесплатный сервер по памяти.
+    chunk_documents = [chunk.text[:4000] for chunk in chunks]
     stored_documents = [seal_document(text) for text in chunk_documents]
+    added: list[tuple[str, str]] = []
+    batch_size = 8
 
-    collection.upsert(
-        ids=chunk_ids,
-        documents=stored_documents,
-        metadatas=metadatas,
-    )
+    for start in range(0, len(chunks), batch_size):
+        end = min(start + batch_size, len(chunks))
+        collection.upsert(
+            ids=chunk_ids[start:end],
+            documents=stored_documents[start:end],
+            metadatas=metadatas[start:end],
+        )
+        added.extend(zip(chunk_ids[start:end], chunk_documents[start:end]))
+        if on_progress is not None:
+            on_progress(end, len(chunks))
+        time.sleep(0.05)
 
-    return list(zip(chunk_ids, chunk_documents))
+    return added
 
 
-def index_single_file(path: Path, collection=None, hashes: dict[str, str] | None = None) -> str:
+def index_single_file(path: Path, collection=None, hashes: dict[str, str] | None = None, on_progress=None) -> str:
     """Переиндексирует один файл. Возвращает краткий статус."""
     path = path.resolve()
     own_hashes = hashes is None
@@ -147,22 +159,22 @@ def index_single_file(path: Path, collection=None, hashes: dict[str, str] | None
         try:
             relative_path = relative_posix(path)
         except ValueError:
-            return f"Пропущен (вне проекта): {path}"
+            return f"Skipped, outside the project: {path}"
         if relative_path in hashes:
             removed_ids = delete_file_chunks(collection, relative_path)
             update_bm25(collection, removed_ids, [])
             hashes.pop(relative_path, None)
             if own_hashes:
                 save_hashes(hashes)
-            return f"Удалён из индекса (игнор): {relative_path}"
-        return f"Пропущен (не индексируется): {path}"
+            return f"Removed from the index: {relative_path}"
+        return f"Skipped, this file is not indexed: {path}"
 
     relative_path = relative_posix(path)
     parsed = process_file(path, relative_path)
     content = str(parsed.get("content") or "")
     digest = md5_text(content)
     if hashes.get(relative_path) == digest:
-        return f"Без изменений: {relative_path}"
+        return f"Already indexed: {relative_path}"
 
     removed_ids = delete_file_chunks(collection, relative_path)
 
@@ -174,6 +186,7 @@ def index_single_file(path: Path, collection=None, hashes: dict[str, str] | None
             "role": parsed.get("role", "general"),
             "source_kind": parsed.get("kind", "file_chunk"),
         },
+        on_progress=on_progress,
     )
 
     update_bm25(
@@ -187,7 +200,7 @@ def index_single_file(path: Path, collection=None, hashes: dict[str, str] | None
     hashes[relative_path] = digest
     if own_hashes:
         save_hashes(hashes)
-    return f"Обновлён: {relative_path} ({chunk_count} чанков)"
+    return f"Updated: {relative_path} ({chunk_count} pieces)"
 
 
 def remove_indexed_file(

@@ -13,6 +13,7 @@ Run with:
 
 from __future__ import annotations
 
+import json
 import os
 import re
 import threading
@@ -465,7 +466,7 @@ _rate_buckets: dict[str, list[float]] = {}
 class RateLimitMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request, call_next):
         path = request.url.path
-        if path.startswith("/api/") and path != "/api/health":
+        if path.startswith("/api/") and path not in {"/api/health", "/api/uploads/status"}:
             ip = request.client.host if request.client else "unknown"
             now = time.monotonic()
             hits = [item for item in _rate_buckets.get(ip, []) if now - item < 60]
@@ -482,18 +483,47 @@ mount_wallet_api(app, PROJECT_ROOT, collection)
 
 UPLOAD_DIR = PROJECT_ROOT / "uploads"
 MAX_UPLOAD_BYTES = 8_000_000
+UPLOAD_STATUS_PATH = PROJECT_ROOT / "hub_data" / "upload_status.json"
 _upload_state = {"running": False, "message": ""}
 _upload_lock = threading.Lock()
 
 
-def _index_upload(path: Path) -> None:
+def _remember_upload_state() -> None:
     try:
-        message = index_single_file(path)
+        UPLOAD_STATUS_PATH.parent.mkdir(parents=True, exist_ok=True)
+        UPLOAD_STATUS_PATH.write_text(
+            json.dumps(_upload_state, ensure_ascii=False),
+            encoding="utf-8",
+        )
+    except OSError:
+        return
+
+
+def _set_upload_state(running: bool, message: str) -> None:
+    with _upload_lock:
+        _upload_state["running"] = running
+        _upload_state["message"] = message
+        _remember_upload_state()
+
+
+if UPLOAD_STATUS_PATH.exists():
+    try:
+        saved = json.loads(UPLOAD_STATUS_PATH.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        saved = {}
+    if saved.get("running"):
+        _set_upload_state(False, "The server restarted while cutting the file. Upload it again.")
+
+
+def _index_upload(path: Path) -> None:
+    def progress(done: int, total: int) -> None:
+        _set_upload_state(True, f"Cutting {path.name}: {done} of {total} pieces")
+
+    try:
+        message = index_single_file(path, collection=collection, on_progress=progress)
     except Exception as exc:
         message = f"Indexing failed: {exc}"
-    with _upload_lock:
-        _upload_state["running"] = False
-        _upload_state["message"] = message
+    _set_upload_state(False, message)
 
 
 @app.post("/api/uploads")
@@ -518,9 +548,7 @@ async def upload_files(files: list[UploadFile] = File(...)) -> dict:
         queued = destination
     if queued is None:
         raise HTTPException(status_code=400, detail="unsupported_file")
-    with _upload_lock:
-        _upload_state["running"] = True
-        _upload_state["message"] = f"Indexing {queued.name}…"
+    _set_upload_state(True, f"Cutting {queued.name}…")
     threading.Thread(target=_index_upload, args=(queued,), daemon=True).start()
     return {"accepted": accepted, "rejected": rejected, "indexing": True}
 
@@ -533,7 +561,10 @@ def upload_status() -> dict:
 
 @app.post("/api/index/clear")
 def clear_uploaded_index() -> dict:
+    global collection
     clear_index()
+    collection = client.get_or_create_collection(name=COLLECTION_NAME)
+    _set_upload_state(False, "Index cleared.")
     return {"ok": True}
 
 
@@ -545,6 +576,10 @@ def api_search(req: SearchRequest) -> SearchResponse:
         return SearchResponse(query=query, role=req.role, count=0, results=[])
 
     role = (req.role or "all").lower()
+    with _upload_lock:
+        still_indexing = _upload_state["running"]
+    if still_indexing:
+        raise HTTPException(status_code=503, detail="indexing")
     try:
         raw_results = hybrid_search(collection, query=query, limit=req.limit, role=role, decrypt=False)
     except VaultLocked as exc:
